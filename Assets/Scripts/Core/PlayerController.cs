@@ -1,4 +1,5 @@
 using UnityEngine;
+using EmberArena.Patterns;
 
 namespace EmberArena.Core
 {
@@ -10,6 +11,9 @@ namespace EmberArena.Core
 
         [SerializeField, Tooltip("Seconds of immunity after being hit.")]
         private float invulnerabilityTime = 0.4f;
+
+        [SerializeField, Tooltip("Health restored when a wave is cleared.")]
+        private int waveClearHeal = 15;
 
         private Rigidbody2D rb;
         private Vector2 input;
@@ -24,11 +28,13 @@ namespace EmberArena.Core
         private void OnEnable()
         {
             HealthChanged += LogHealth;
+            GameEvents.WaveCleared += HealBetweenWaves;
         }
 
         private void OnDisable()
         {
             HealthChanged -= LogHealth;
+            GameEvents.WaveCleared -= HealBetweenWaves;
         }
 
         private void Update()
@@ -58,12 +64,18 @@ namespace EmberArena.Core
         {
             Debug.Log("Player died");
             rb.linearVelocity = Vector2.zero;
+            GameEvents.RaisePlayerDied();
         }
 
         // Observer: this is the first subscriber to HealthChanged, just logging for now until the HUD exists.
         private void LogHealth(int current, int max)
         {
             Debug.Log($"Player health {current}/{max}");
+        }
+
+        private void HealBetweenWaves(int wave)
+        {
+            Heal(waveClearHeal);
         }
 
         [ContextMenu("Test: Take 10 Damage")]

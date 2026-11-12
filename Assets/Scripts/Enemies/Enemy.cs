@@ -1,5 +1,6 @@
 using UnityEngine;
 using EmberArena.Core;
+using EmberArena.Patterns;
 
 namespace EmberArena.Enemies
 {
@@ -94,6 +95,7 @@ namespace EmberArena.Enemies
 
         protected override void Die()
         {
+            GameEvents.RaiseEnemyKilled(ScoreValue);
             Destroy(gameObject);
         }
     }
