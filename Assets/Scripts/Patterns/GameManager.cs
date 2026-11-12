@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using EmberArena.Algorithms;
 
 namespace EmberArena.Patterns
 {
@@ -38,6 +40,16 @@ namespace EmberArena.Patterns
             GameEvents.PlayerDied -= EndGame;
         }
 
+        private void Update()
+        {
+            if (State == GameState.GameOver && Input.GetKeyDown(KeyCode.R)) Restart();
+        }
+
+        public void Restart()
+        {
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
@@ -59,7 +71,9 @@ namespace EmberArena.Patterns
         private void EndGame()
         {
             State = GameState.GameOver;
+            Leaderboard.Add(Score);
             Debug.Log($"Game over. Final score {Score}");
+            GameEvents.RaiseGameOver(Score);
         }
     }
 }

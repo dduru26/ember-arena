@@ -12,6 +12,7 @@ namespace EmberArena.Patterns
         public static event Action<int> WaveCleared;
         public static event Action<int> ScoreChanged;
         public static event Action PlayerDied;
+        public static event Action<int> GameOver;
 
         public static void RaiseEnemyKilled(int points)
         {
@@ -38,6 +39,11 @@ namespace EmberArena.Patterns
             PlayerDied?.Invoke();
         }
 
+        public static void RaiseGameOver(int finalScore)
+        {
+            GameOver?.Invoke(finalScore);
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetAll()
         {
@@ -46,6 +52,7 @@ namespace EmberArena.Patterns
             WaveCleared = null;
             ScoreChanged = null;
             PlayerDied = null;
+            GameOver = null;
         }
     }
 }
