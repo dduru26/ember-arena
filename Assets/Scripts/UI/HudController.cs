@@ -11,21 +11,29 @@ namespace EmberArena.UI
     {
         private static bool hasStarted;
 
-        private static readonly Color PanelColor = new Color(0.10f, 0.08f, 0.06f, 0.88f);
-        private static readonly Color Ember = new Color(1f, 0.48f, 0.18f);
-        private static readonly Color Cream = new Color(0.95f, 0.91f, 0.88f);
-        private static readonly Color Muted = new Color(0.64f, 0.60f, 0.54f);
+        private const string BestScoreKey = "EmberBestScore";
+        private const string BestWaveKey = "EmberBestWave";
+        private const int HealthSegments = 10;
+        private const float BannerDuration = 1.8f;
+
+        private static readonly Color Ground = new Color(0.063f, 0.043f, 0.035f, 0.92f);
+        private static readonly Color PanelColor = new Color(0.118f, 0.078f, 0.063f, 0.96f);
+        private static readonly Color Ember = new Color(1f, 0.416f, 0.169f);
+        private static readonly Color Amber = new Color(1f, 0.706f, 0.329f);
+        private static readonly Color Cream = new Color(0.965f, 0.922f, 0.867f);
+        private static readonly Color Muted = new Color(0.71f, 0.643f, 0.584f);
+        private static readonly Color Dark = new Color(0.102f, 0.059f, 0.039f);
         private static readonly Color Danger = new Color(1f, 0.35f, 0.35f);
-        private static readonly Color Glow = new Color(1f, 0.85f, 0.66f, 0.55f);
+        private static readonly Color SegmentEmpty = new Color(0.965f, 0.922f, 0.867f, 0.14f);
+        private static readonly Color SegmentTrail = new Color(1f, 0.416f, 0.169f, 0.35f);
+        private static readonly Color Line = new Color(0.965f, 0.922f, 0.867f, 0.2f);
+        private static readonly Color Soft = new Color(0.965f, 0.922f, 0.867f, 0.06f);
 
         private PlayerController player;
         private Font font;
         private Sprite roundedSprite;
 
-        private RectTransform healthFill;
-        private RectTransform healthTrail;
-        private Image healthFillImage;
-        private Image healthTrailImage;
+        private Image[] healthSegments;
         private Text healthText;
         private Text scoreText;
         private Text waveText;
@@ -33,12 +41,20 @@ namespace EmberArena.UI
         private Image hitFlashImage;
 
         private GameObject gameOverPanel;
+        private GameObject newRecordBadge;
         private Text finalScoreText;
-        private Text newBestText;
-        private Text[] leaderboardRows;
+        private Text finalWaveText;
+        private Text bestScoreText;
+        private Text previousBestText;
+        private GameObject[] leaderboardRows;
+        private Image[] leaderboardRowImages;
+        private Text[] leaderboardRanks;
+        private Text[] leaderboardScores;
 
         private GameObject titlePanel;
         private Text promptText;
+        private Text titleBestScoreText;
+        private Text titleBestWaveText;
 
         private float targetFraction = 1f;
         private float shownFraction = 1f;
@@ -49,8 +65,6 @@ namespace EmberArena.UI
         private float bannerTimer;
         private float openedAt;
         private bool titleActive;
-
-        private const float BannerDuration = 1.8f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatic()
@@ -64,6 +78,9 @@ namespace EmberArena.UI
             if (font == null) font = Font.CreateDynamicFontFromOSFont("Arial", 16);
             roundedSprite = CreateRoundedSprite(32, 12);
             BuildUi();
+
+            titleBestScoreText.text = PlayerPrefs.GetInt(BestScoreKey, 0).ToString("N0");
+            titleBestWaveText.text = PlayerPrefs.GetInt(BestWaveKey, 0).ToString();
 
             openedAt = Time.unscaledTime;
             titleActive = !hasStarted;
@@ -111,7 +128,7 @@ namespace EmberArena.UI
             if (titleActive)
             {
                 Color prompt = promptText.color;
-                prompt.a = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
+                prompt.a = 0.6f + 0.4f * Mathf.Sin(Time.unscaledTime * 4f);
                 promptText.color = prompt;
 
                 if (Time.unscaledTime - openedAt > 0.3f && Input.anyKeyDown) BeginGame();
@@ -119,12 +136,7 @@ namespace EmberArena.UI
 
             shownFraction = Mathf.Lerp(shownFraction, targetFraction, 1f - Mathf.Exp(-14f * dt));
             trailFraction = Mathf.Lerp(trailFraction, targetFraction, 1f - Mathf.Exp(-3f * dt));
-
-            healthFill.anchorMax = new Vector2(shownFraction, 1f);
-            healthTrail.anchorMax = new Vector2(trailFraction, 1f);
-            healthFillImage.enabled = shownFraction > 0.03f;
-            healthTrailImage.enabled = trailFraction > 0.03f;
-            healthFillImage.color = targetFraction > 0.3f ? Ember : Danger;
+            DrawHealthSegments();
 
             hitFlash = Mathf.MoveTowards(hitFlash, 0f, dt * 1.2f);
             hitFlashImage.color = new Color(1f, 0.2f, 0.15f, hitFlash);
@@ -147,6 +159,22 @@ namespace EmberArena.UI
             }
         }
 
+        private void DrawHealthSegments()
+        {
+            Color fill = targetFraction > 0.3f ? Ember : Danger;
+
+            for (int i = 0; i < healthSegments.Length; i++)
+            {
+                float low = (float)i / healthSegments.Length;
+                float filled = Mathf.Clamp01((shownFraction - low) * healthSegments.Length);
+                float trailing = Mathf.Clamp01((trailFraction - low) * healthSegments.Length);
+
+                if (filled > 0f) healthSegments[i].color = Color.Lerp(SegmentEmpty, fill, filled);
+                else if (trailing > 0f) healthSegments[i].color = Color.Lerp(SegmentEmpty, SegmentTrail, trailing);
+                else healthSegments[i].color = SegmentEmpty;
+            }
+        }
+
         private void BeginGame()
         {
             hasStarted = true;
@@ -158,7 +186,7 @@ namespace EmberArena.UI
         private void UpdateHealth(int current, int max)
         {
             targetFraction = max > 0 ? (float)current / max : 0f;
-            healthText.text = $"{current} / {max}";
+            healthText.text = current.ToString();
             if (previousHealth > current) hitFlash = 0.35f;
             previousHealth = current;
         }
@@ -188,24 +216,34 @@ namespace EmberArena.UI
 
         private void ShowGameOver(int finalScore)
         {
+            int wave = GameManager.Instance != null ? GameManager.Instance.Wave : 0;
+            int previousBest = PlayerPrefs.GetInt(BestScoreKey, 0);
+            int best = Mathf.Max(previousBest, finalScore);
+            PlayerPrefs.SetInt(BestScoreKey, best);
+            PlayerPrefs.SetInt(BestWaveKey, Mathf.Max(PlayerPrefs.GetInt(BestWaveKey, 0), wave));
+            PlayerPrefs.Save();
+
+            finalScoreText.text = finalScore.ToString("N0");
+            finalWaveText.text = wave.ToString();
+            bestScoreText.text = best.ToString("N0");
+            previousBestText.text = previousBest.ToString("N0");
+            newRecordBadge.SetActive(previousBest > 0 && finalScore > previousBest);
+
             var top = Leaderboard.Top(5);
             int highlight = top.IndexOf(finalScore);
 
-            finalScoreText.text = finalScore.ToString("N0");
-            bool newBest = highlight == 0 && top.Count > 1 && top[1] < finalScore;
-            newBestText.text = newBest ? "NEW BEST SCORE" : "";
-
             for (int i = 0; i < leaderboardRows.Length; i++)
             {
-                if (i < top.Count)
-                {
-                    leaderboardRows[i].text = $"{i + 1}.   {top[i]:N0}";
-                    leaderboardRows[i].color = i == highlight ? Ember : Cream;
-                }
-                else
-                {
-                    leaderboardRows[i].text = "";
-                }
+                bool used = i < top.Count;
+                leaderboardRows[i].SetActive(used);
+                if (!used) continue;
+
+                bool mine = i == highlight;
+                leaderboardRowImages[i].color = mine ? Amber : Soft;
+                leaderboardRanks[i].text = (i + 1).ToString();
+                leaderboardRanks[i].color = mine ? Dark : Cream;
+                leaderboardScores[i].text = top[i].ToString("N0");
+                leaderboardScores[i].color = mine ? Dark : Cream;
             }
 
             gameOverPanel.SetActive(true);
@@ -228,55 +266,125 @@ namespace EmberArena.UI
             Vector2 topLeft = new Vector2(0f, 1f);
             Vector2 topRight = new Vector2(1f, 1f);
             Vector2 topCenter = new Vector2(0.5f, 1f);
+            Vector2 bottomLeft = new Vector2(0f, 0f);
             Vector2 center = new Vector2(0.5f, 0.5f);
 
-            Image bar = CreateImage("Health Bar", root, PanelColor, topLeft, new Vector2(20f, -20f), new Vector2(250f, 28f), true);
-            healthTrailImage = CreateImage("Health Trail", bar.transform, Glow, new Vector2(0f, 0.5f), Vector2.zero, Vector2.zero, true);
-            healthTrail = healthTrailImage.rectTransform;
-            Stretch(healthTrail, 3f);
-            healthFillImage = CreateImage("Health Fill", bar.transform, Ember, new Vector2(0f, 0.5f), Vector2.zero, Vector2.zero, true);
-            healthFill = healthFillImage.rectTransform;
-            Stretch(healthFill, 3f);
-            healthText = CreateText("Health Text", bar.transform, "100 / 100", 14, TextAnchor.MiddleCenter, center, Vector2.zero, new Vector2(250f, 28f), Cream, true);
+            CreateText("Score Label", root, "SCORE", 12, TextAnchor.UpperLeft, topLeft, new Vector2(38f, -26f), new Vector2(200f, 18f), Muted, false);
+            scoreText = CreateText("Score", root, "0", 52, TextAnchor.UpperLeft, topLeft, new Vector2(36f, -40f), new Vector2(300f, 64f), Cream, true);
 
-            CreateText("Score Label", root, "SCORE", 12, TextAnchor.UpperRight, topRight, new Vector2(-22f, -14f), new Vector2(200f, 18f), Muted, true);
-            scoreText = CreateText("Score", root, "0", 32, TextAnchor.UpperRight, topRight, new Vector2(-20f, -28f), new Vector2(240f, 44f), Cream, true);
+            Image pillBorder = CreateImage("Wave Pill", root, new Color(Amber.r, Amber.g, Amber.b, 0.5f), topRight, new Vector2(-36f, -32f), new Vector2(124f, 40f), true);
+            Image pill = CreateImage("Wave Pill Fill", pillBorder.transform, Ground, center, Vector2.zero, Vector2.zero, true);
+            Stretch(pill.rectTransform, 1.5f);
+            waveText = CreateText("Wave Text", pillBorder.transform, "GET READY", 17, TextAnchor.MiddleCenter, center, Vector2.zero, new Vector2(124f, 40f), Amber, true);
 
-            Image pill = CreateImage("Wave Pill", root, PanelColor, topCenter, new Vector2(0f, -20f), new Vector2(130f, 30f), true);
-            waveText = CreateText("Wave Text", pill.transform, "GET READY", 16, TextAnchor.MiddleCenter, center, Vector2.zero, new Vector2(130f, 30f), Ember, true);
+            Image hpBlock = CreateImage("Health Block", root, Ember, bottomLeft, new Vector2(36f, 28f), new Vector2(64f, 44f), true);
+            CreateText("Health Label", hpBlock.transform, "HP", 11, TextAnchor.MiddleCenter, center, new Vector2(0f, 11f), new Vector2(64f, 16f), Dark, true);
+            healthText = CreateText("Health Text", hpBlock.transform, "100", 20, TextAnchor.MiddleCenter, center, new Vector2(0f, -7f), new Vector2(64f, 26f), Dark, true);
+
+            GameObject segmentRow = new GameObject("Health Segments", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            segmentRow.transform.SetParent(root, false);
+            RectTransform segmentRect = segmentRow.GetComponent<RectTransform>();
+            segmentRect.anchorMin = new Vector2(0f, 0f);
+            segmentRect.anchorMax = new Vector2(1f, 0f);
+            segmentRect.pivot = new Vector2(0.5f, 0f);
+            segmentRect.offsetMin = new Vector2(116f, 28f);
+            segmentRect.offsetMax = new Vector2(-36f, 42f);
+            HorizontalLayoutGroup layout = segmentRow.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 4f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+
+            healthSegments = new Image[HealthSegments];
+            for (int i = 0; i < HealthSegments; i++)
+            {
+                GameObject segment = new GameObject($"Segment {i + 1}", typeof(RectTransform), typeof(Image));
+                segment.transform.SetParent(segmentRow.transform, false);
+                healthSegments[i] = segment.GetComponent<Image>();
+                healthSegments[i].color = Ember;
+                healthSegments[i].raycastTarget = false;
+            }
 
             hitFlashImage = CreateImage("Hit Flash", root, new Color(1f, 0.2f, 0.15f, 0f), center, Vector2.zero, Vector2.zero, false);
             Stretch(hitFlashImage.rectTransform, 0f);
 
             bannerText = CreateText("Banner", root, "", 54, TextAnchor.MiddleCenter, center, new Vector2(0f, 90f), new Vector2(700f, 80f), new Color(Ember.r, Ember.g, Ember.b, 0f), true);
 
-            Image dim = CreateImage("Game Over", root, new Color(0f, 0f, 0f, 0.72f), center, Vector2.zero, Vector2.zero, false);
+            BuildGameOver(root, topLeft, topRight, topCenter, center);
+            BuildTitle(root, topCenter, center);
+        }
+
+        private void BuildGameOver(Transform root, Vector2 topLeft, Vector2 topRight, Vector2 topCenter, Vector2 center)
+        {
+            Image dim = CreateImage("Game Over", root, new Color(0.04f, 0.024f, 0.02f, 0.78f), center, Vector2.zero, Vector2.zero, false);
             Stretch(dim.rectTransform, 0f);
             gameOverPanel = dim.gameObject;
 
-            Image card = CreateImage("Game Over Card", dim.transform, PanelColor, center, Vector2.zero, new Vector2(380f, 430f), true);
-            CreateText("Title", card.transform, "GAME OVER", 34, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -26f), new Vector2(340f, 44f), Ember, true);
-            CreateText("Score Label", card.transform, "SCORE", 13, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -84f), new Vector2(340f, 20f), Muted, true);
-            finalScoreText = CreateText("Final Score", card.transform, "0", 46, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -102f), new Vector2(340f, 58f), Cream, true);
-            newBestText = CreateText("New Best", card.transform, "", 16, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -162f), new Vector2(340f, 24f), Ember, true);
-            CreateText("List Label", card.transform, "BEST SCORES", 13, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -198f), new Vector2(340f, 20f), Muted, true);
+            Image card = CreateImage("Game Over Card", dim.transform, PanelColor, center, Vector2.zero, new Vector2(700f, 424f), true);
+            CreateText("Title", card.transform, "YOU FELL", 40, TextAnchor.UpperLeft, topLeft, new Vector2(28f, -22f), new Vector2(320f, 52f), Ember, true);
 
-            leaderboardRows = new Text[5];
-            for (int i = 0; i < leaderboardRows.Length; i++)
+            Image badge = CreateImage("New Record", card.transform, Amber, topRight, new Vector2(-28f, -30f), new Vector2(130f, 28f), true);
+            CreateText("New Record Text", badge.transform, "NEW RECORD", 13, TextAnchor.MiddleCenter, center, Vector2.zero, new Vector2(130f, 28f), Dark, true);
+            newRecordBadge = badge.gameObject;
+
+            finalScoreText = CreateTile(card.transform, topLeft, "SCORE", new Vector2(28f, -92f), new Color(Ember.r, Ember.g, Ember.b, 0.14f), Cream);
+            finalWaveText = CreateTile(card.transform, topLeft, "WAVE REACHED", new Vector2(221f, -92f), new Color(Amber.r, Amber.g, Amber.b, 0.12f), Cream);
+            bestScoreText = CreateTile(card.transform, topLeft, "BEST SCORE", new Vector2(28f, -204f), Soft, Amber);
+            previousBestText = CreateTile(card.transform, topLeft, "PREVIOUS BEST", new Vector2(221f, -204f), Soft, Cream);
+
+            CreateText("List Label", card.transform, "TOP 5", 11, TextAnchor.UpperLeft, topLeft, new Vector2(422f, -92f), new Vector2(250f, 16f), Muted, false);
+
+            leaderboardRows = new GameObject[5];
+            leaderboardRowImages = new Image[5];
+            leaderboardRanks = new Text[5];
+            leaderboardScores = new Text[5];
+            for (int i = 0; i < 5; i++)
             {
-                leaderboardRows[i] = CreateText($"Row {i + 1}", card.transform, "", 22, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -224f - i * 30f), new Vector2(340f, 30f), Cream, false);
+                Image row = CreateImage($"Row {i + 1}", card.transform, Soft, topLeft, new Vector2(422f, -116f - i * 40f), new Vector2(250f, 34f), true);
+                leaderboardRows[i] = row.gameObject;
+                leaderboardRowImages[i] = row;
+                leaderboardRanks[i] = CreateText("Rank", row.transform, "", 16, TextAnchor.MiddleLeft, topLeft, new Vector2(12f, -17f), new Vector2(60f, 24f), Cream, true);
+                leaderboardRanks[i].rectTransform.pivot = new Vector2(0f, 0.5f);
+                leaderboardScores[i] = CreateText("Score", row.transform, "", 16, TextAnchor.MiddleRight, topRight, new Vector2(-12f, -17f), new Vector2(150f, 24f), Cream, true);
+                leaderboardScores[i].rectTransform.pivot = new Vector2(1f, 0.5f);
             }
 
-            CreateText("Footer", card.transform, "Press R to restart", 16, TextAnchor.UpperCenter, topCenter, new Vector2(0f, -392f), new Vector2(340f, 24f), Muted, false);
-            gameOverPanel.SetActive(false);
+            Image button = CreateImage("Play Again", card.transform, Ember, topLeft, new Vector2(28f, -340f), new Vector2(644f, 52f), true);
+            CreateText("Play Again Text", button.transform, "PLAY AGAIN (R)", 19, TextAnchor.MiddleCenter, center, Vector2.zero, new Vector2(644f, 52f), Dark, true);
 
-            Image title = CreateImage("Title Screen", root, new Color(0.06f, 0.05f, 0.04f, 0.92f), center, Vector2.zero, Vector2.zero, false);
+            gameOverPanel.SetActive(false);
+        }
+
+        private void BuildTitle(Transform root, Vector2 topCenter, Vector2 center)
+        {
+            Image title = CreateImage("Title Screen", root, Ground, center, Vector2.zero, Vector2.zero, false);
             Stretch(title.rectTransform, 0f);
             titlePanel = title.gameObject;
-            CreateText("Game Title", title.transform, "EMBER ARENA", 64, TextAnchor.MiddleCenter, center, new Vector2(0f, 50f), new Vector2(760f, 90f), Ember, true);
-            CreateText("Tagline", title.transform, "Survive the waves", 22, TextAnchor.MiddleCenter, center, new Vector2(0f, -8f), new Vector2(600f, 34f), Cream, false);
-            CreateText("Controls", title.transform, "WASD or arrow keys to move. Your gun fires on its own.", 16, TextAnchor.MiddleCenter, center, new Vector2(0f, -50f), new Vector2(700f, 26f), Muted, false);
-            promptText = CreateText("Prompt", title.transform, "Press any key to start", 20, TextAnchor.MiddleCenter, center, new Vector2(0f, -120f), new Vector2(600f, 30f), Cream, true);
+
+            CreateText("Eyebrow", title.transform, "SURVIVE THE WAVES", 14, TextAnchor.MiddleCenter, center, new Vector2(0f, 168f), new Vector2(600f, 22f), Amber, true);
+            CreateText("Game Title", title.transform, "EMBER", 88, TextAnchor.MiddleCenter, center, new Vector2(0f, 98f), new Vector2(760f, 96f), Cream, true);
+            CreateText("Game Title Accent", title.transform, "ARENA", 88, TextAnchor.MiddleCenter, center, new Vector2(0f, 14f), new Vector2(760f, 96f), Ember, true);
+
+            Image strip = CreateImage("Best Strip", title.transform, new Color(0.063f, 0.043f, 0.035f, 0.6f), center, new Vector2(0f, -86f), new Vector2(340f, 62f), true);
+            Image divider = CreateImage("Divider", strip.transform, Line, center, Vector2.zero, new Vector2(1f, 62f), false);
+            divider.rectTransform.sizeDelta = new Vector2(1f, 62f);
+            CreateText("Best Score Label", strip.transform, "BEST SCORE", 11, TextAnchor.MiddleCenter, center, new Vector2(-85f, 16f), new Vector2(170f, 16f), Muted, false);
+            titleBestScoreText = CreateText("Best Score Value", strip.transform, "0", 26, TextAnchor.MiddleCenter, center, new Vector2(-85f, -8f), new Vector2(170f, 32f), Amber, true);
+            CreateText("Best Wave Label", strip.transform, "BEST WAVE", 11, TextAnchor.MiddleCenter, center, new Vector2(85f, 16f), new Vector2(170f, 16f), Muted, false);
+            titleBestWaveText = CreateText("Best Wave Value", strip.transform, "0", 26, TextAnchor.MiddleCenter, center, new Vector2(85f, -8f), new Vector2(170f, 32f), Amber, true);
+
+            Image button = CreateImage("Play Button", title.transform, Ember, center, new Vector2(0f, -150f), new Vector2(340f, 56f), true);
+            promptText = CreateText("Prompt", button.transform, "PRESS ANY KEY TO PLAY", 19, TextAnchor.MiddleCenter, center, Vector2.zero, new Vector2(340f, 56f), Dark, true);
+
+            CreateText("Controls", title.transform, "WASD or arrows to move   ·   Gun fires automatically   ·   R to restart", 13, TextAnchor.MiddleCenter, center, new Vector2(0f, -208f), new Vector2(740f, 20f), Muted, false);
+        }
+
+        private Text CreateTile(Transform parent, Vector2 anchor, string label, Vector2 position, Color tint, Color valueColor)
+        {
+            Image tile = CreateImage($"{label} Tile", parent, tint, anchor, position, new Vector2(181f, 100f), true);
+            CreateText($"{label} Label", tile.transform, label, 11, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(14f, -14f), new Vector2(160f, 16f), Muted, false);
+            return CreateText($"{label} Value", tile.transform, "0", 38, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(14f, -36f), new Vector2(160f, 50f), valueColor, true);
         }
 
         private Image CreateImage(string objectName, Transform parent, Color color, Vector2 anchor, Vector2 position, Vector2 size, bool rounded)
