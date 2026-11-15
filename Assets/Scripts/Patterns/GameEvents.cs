@@ -4,7 +4,7 @@ using UnityEngine;
 namespace EmberArena.Patterns
 {
     // Observer: this is the one place where game events are announced.
-    // The enemy, the player and the wave spawner only raise events here, and the score, the waves and later the HUD listen, so none of them need a reference to each other.
+    // The enemy, the player and the wave spawner only raise events here, and the score, the waves and the HUD listen, so none of them need a reference to each other.
     public static class GameEvents
     {
         public static event Action<int> EnemyKilled;

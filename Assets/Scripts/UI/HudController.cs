@@ -73,7 +73,7 @@ namespace EmberArena.UI
 
         private void Start()
         {
-            player = FindFirstObjectByType<PlayerController>();
+            player = FindAnyObjectByType<PlayerController>();
             if (player == null) return;
             player.HealthChanged += UpdateHealth;
             UpdateHealth(player.CurrentHealth, player.MaxHealth);

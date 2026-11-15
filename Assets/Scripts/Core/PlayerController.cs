@@ -67,7 +67,7 @@ namespace EmberArena.Core
             GameEvents.RaisePlayerDied();
         }
 
-        // Observer: this is the first subscriber to HealthChanged, just logging for now until the HUD exists.
+        // Observer: the player listens to its own HealthChanged event and logs it, and the HUD listens to the same event for the health bar.
         private void LogHealth(int current, int max)
         {
             Debug.Log($"Player health {current}/{max}");

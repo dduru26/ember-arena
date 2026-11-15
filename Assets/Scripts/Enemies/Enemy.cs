@@ -35,7 +35,7 @@ namespace EmberArena.Enemies
 
         private void Start()
         {
-            Player = FindFirstObjectByType<PlayerController>();
+            Player = FindAnyObjectByType<PlayerController>();
         }
 
         private void OnEnable()
